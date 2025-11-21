@@ -21,20 +21,20 @@ pub enum State {
 #[repr(u8)]
 pub enum Action {
     None = 0,
-    Ignore,
-    Print,
-    Execute,
-    Clear,
-    Collect,
-    Param,
-    EscDispatch,
-    CsiDispatch,
-    Hook,
-    Put,
-    Unhook,
-    OscStart,
-    OscPut,
-    OscEnd,
+    Ignore = 1,
+    Print = 2,
+    Execute = 3,
+    Clear = 4,
+    Collect = 5,
+    Param = 6,
+    EscDispatch = 7,
+    CsiDispatch = 8,
+    Hook = 9,
+    Put = 10,
+    Unhook = 11,
+    OscStart = 12,
+    OscPut = 13,
+    OscEnd = 14,
 }
 
 pub type TableEntry = u8;
@@ -50,7 +50,7 @@ pub const CLASS_TABLE: [u8; 256] = [
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // 20-2F
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 30-3F
     6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, // 40-4F
-    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 7, 6, 6, // 50-5F
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 7, 6, 8, // 50-5F ('P' = 0x50 = DcsEntry)
     6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, // 60-6F
     6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 0, // 70-7F
     // 80-FF treated as Print (1)
@@ -84,7 +84,7 @@ pub const TRANSITION_TABLE: [[TableEntry; 16]; 14] = [
         pack(State::Ground, Action::EscDispatch),         // 1: Print -> Dispatch
         pack(State::Ground, Action::EscDispatch),         // 2: Param -> Dispatch
         pack(State::EscapeIntermediate, Action::Collect), // 3: Inter -> Collect
-        pack(State::CsiEntry, Action::None),              // 4: [ -> CsiEntry
+        pack(State::CsiEntry, Action::Clear),             // 4: [ -> CsiEntry
         pack(State::Escape, Action::Clear),               // 5: Esc -> Restart Esc
         pack(State::Ground, Action::EscDispatch),         // 6: Disp -> Dispatch
         pack(State::OscString, Action::OscStart),         // 7: ] -> Osc
@@ -134,7 +134,7 @@ pub const TRANSITION_TABLE: [[TableEntry; 16]; 14] = [
     [
         pack(State::CsiIntermediate, Action::Execute),    // 0
         pack(State::CsiIgnore, Action::None),             // 1
-        pack(State::CsiIgnore, Action::None),             // 2
+        pack(State::CsiIgnore, Action::Param),             // 2
         pack(State::CsiIntermediate, Action::Collect),    // 3
         pack(State::CsiIgnore, Action::None),             // 4
         pack(State::Escape, Action::Clear),               // 5
@@ -158,52 +158,77 @@ pub const TRANSITION_TABLE: [[TableEntry; 16]; 14] = [
     ],
     // State 7: DcsEntry
     [
-        pack(State::DcsEntry, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsParam, Action::Ignore), pack(State::DcsIntermediate, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), pack(State::Escape, Action::Clear),
-        pack(State::DcsPassthrough, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), 0,0,0,0,0,0,0
+        pack(State::DcsEntry, Action::Execute),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsParam, Action::Param),
+        pack(State::DcsIntermediate, Action::Collect),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::Escape, Action::Clear),
+        pack(State::DcsPassthrough, Action::Hook),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        0,0,0,0,0,0,0
     ],
     // State 8: DcsParam
     [
-        pack(State::DcsParam, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsParam, Action::Ignore), pack(State::DcsIntermediate, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), pack(State::Escape, Action::Clear),
-        pack(State::DcsPassthrough, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), 0,0,0,0,0,0,0
+        pack(State::DcsParam, Action::Execute),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsParam, Action::Param),
+        pack(State::DcsIntermediate, Action::Collect),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::Escape, Action::Clear),
+        pack(State::DcsPassthrough, Action::Hook),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        0,0,0,0,0,0,0
     ],
     // State 9: DcsIntermediate
     [
-        pack(State::DcsIntermediate, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), pack(State::DcsIntermediate, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), pack(State::Escape, Action::Clear),
-        pack(State::DcsPassthrough, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), 0,0,0,0,0,0,0
+        pack(State::DcsIntermediate, Action::Execute),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Param),
+        pack(State::DcsIntermediate, Action::Collect),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::Escape, Action::Clear),
+        pack(State::DcsPassthrough, Action::Hook),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        0,0,0,0,0,0,0
     ],
     // State 10: DcsPassthrough (Wait for ST)
     [
-        pack(State::DcsPassthrough, Action::Put), pack(State::DcsPassthrough, Action::Put),
-        pack(State::DcsPassthrough, Action::Put), pack(State::DcsPassthrough, Action::Put),
-        pack(State::DcsPassthrough, Action::Put), pack(State::Escape, Action::Clear),
-        pack(State::DcsPassthrough, Action::Put), pack(State::DcsPassthrough, Action::Put),
-        pack(State::DcsPassthrough, Action::Put), 0,0,0,0,0,0,0
+        pack(State::DcsPassthrough, Action::Put),
+        pack(State::DcsPassthrough, Action::Put),
+        pack(State::DcsPassthrough, Action::Put),
+        pack(State::DcsPassthrough, Action::Put),
+        pack(State::DcsPassthrough, Action::Put),
+        pack(State::Escape, Action::Clear),
+        pack(State::DcsPassthrough, Action::Put),
+        pack(State::DcsPassthrough, Action::Put),
+        pack(State::DcsPassthrough, Action::Put),
+        0,0,0,0,0,0,0
     ],
     // State 11: DcsIgnore (Wait for ST)
     [
-        pack(State::DcsIgnore, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), pack(State::Escape, Action::Clear),
-        pack(State::DcsIgnore, Action::Ignore), pack(State::DcsIgnore, Action::Ignore),
-        pack(State::DcsIgnore, Action::Ignore), 0,0,0,0,0,0,0
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::Escape, Action::Clear),
+        pack(State::Ground, Action::Unhook),
+        pack(State::DcsIgnore, Action::Ignore),
+        pack(State::DcsIgnore, Action::Ignore),
+        0,0,0,0,0,0,0
     ],
     // State 12: OscString
     [
-        pack(State::OscString, Action::Ignore),     // 0: Exe -> Ignore inside OSC
+        pack(State::Ground, Action::OscEnd),        // 0: Exe (BEL) -> END OSC!
         pack(State::OscString, Action::OscPut),     // 1: Print
         pack(State::OscString, Action::OscPut),     // 2: Param
         pack(State::OscString, Action::OscPut),     // 3: Inter
         pack(State::OscString, Action::OscPut),     // 4: Csi
-        pack(State::Escape, Action::Clear),         // 5: Esc (ST or Cancel)
+        pack(State::Escape, Action::OscEnd),        // 5: Esc (ST) -> END OSC then handle ESC
         pack(State::OscString, Action::OscPut),     // 6: Disp
         pack(State::OscString, Action::OscPut),     // 7: Osc
         pack(State::OscString, Action::OscPut),     // 8: Sos
@@ -211,10 +236,15 @@ pub const TRANSITION_TABLE: [[TableEntry; 16]; 14] = [
     ],
     // State 13: SosPmApcString (Ignore everything until ST)
     [
-        pack(State::SosPmApcString, Action::Ignore), pack(State::SosPmApcString, Action::Ignore),
-        pack(State::SosPmApcString, Action::Ignore), pack(State::SosPmApcString, Action::Ignore),
-        pack(State::SosPmApcString, Action::Ignore), pack(State::Escape, Action::Clear),
-        pack(State::SosPmApcString, Action::Ignore), pack(State::SosPmApcString, Action::Ignore),
-        pack(State::SosPmApcString, Action::Ignore), 0,0,0,0,0,0,0
+        pack(State::SosPmApcString, Action::Ignore),
+        pack(State::SosPmApcString, Action::Ignore),
+        pack(State::SosPmApcString, Action::Ignore),
+        pack(State::SosPmApcString, Action::Ignore),
+        pack(State::SosPmApcString, Action::Ignore),
+        pack(State::Escape, Action::Clear),
+        pack(State::SosPmApcString, Action::Ignore),
+        pack(State::SosPmApcString, Action::Ignore),
+        pack(State::SosPmApcString, Action::Ignore),
+        0,0,0,0,0,0,0
     ],
 ];

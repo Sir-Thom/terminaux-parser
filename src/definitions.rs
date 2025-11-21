@@ -130,3 +130,14 @@ pub enum TerminalOutput {
     ExitAltScreen,
     Invalid,
 }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FormatTag {
+    pub start: usize,
+    pub end: usize,
+    pub blink: bool,
+    pub fg_color: SelectGraphicRendition,
+    pub bg_color: SelectGraphicRendition,
+    pub bold: bool,
+    pub italic: bool,
+    pub url: Option<String>,
+}
