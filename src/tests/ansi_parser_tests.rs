@@ -1291,4 +1291,134 @@ mod comprehensive_tests {
         // Should handle gracefully
         assert!(!output.is_empty());
     }
+
+    #[test]
+    fn test_scrolling_regions_decstbm() {
+        let mut parser = AnsiParser::new();
+
+        // 1. Set top and bottom margins (e.g., lines 5 to 20)
+        // Sequence: CSI top ; bottom r
+        let output = parser.push(b"\x1B[5;20r");
+        assert_eq!(output, vec![TerminalOutput::SetScrollingRegion {
+            top: 5,
+            bottom: Some(20)
+        }]);
+
+        // 2. Set only top margin (bottom defaults to None/Page End)
+        // Note: The parser logic typically defaults missing params to specific values.
+        // Based on your implementation: get_param_opt(1) returns None if missing.
+        let output = parser.push(b"\x1B[5r");
+        assert_eq!(output, vec![TerminalOutput::SetScrollingRegion {
+            top: 5,
+            bottom: None
+        }]);
+
+        // 3. Reset margins (empty params)
+        let output = parser.push(b"\x1B[r");
+        assert_eq!(output, vec![TerminalOutput::SetScrollingRegion {
+            top: 1, // Default for param 0
+            bottom: None
+        }]);
+    }
+
+    #[test]
+    fn test_cursor_styling_decscusr() {
+        let mut parser = AnsiParser::new();
+
+        // 1. Blinking Block (Default/1)
+        let output = parser.push(b"\x1B[1 q");
+        assert_eq!(output, vec![TerminalOutput::SetCursorStyle {
+            shape: CursorShape::Block,
+            blinking: true
+        }]);
+
+        // 2. Steady Underline (4)
+        let output = parser.push(b"\x1B[4 q");
+        assert_eq!(output, vec![TerminalOutput::SetCursorStyle {
+            shape: CursorShape::Underline,
+            blinking: false
+        }]);
+
+        // 3. Blinking Bar/Beam (5)
+        let output = parser.push(b"\x1B[5 q");
+        assert_eq!(output, vec![TerminalOutput::SetCursorStyle {
+            shape: CursorShape::Beam,
+            blinking: true
+        }]);
+
+        // 4. Test intermediate space handling (Space is required for 'q' to be DECSCUSR)
+        // If the space is missing, it is a different command (DECLL) or invalid
+        let output = parser.push(b"\x1B[1q"); // No space
+        // Assuming implementation ignores unknown or maps to LED control,
+        // but definitely NOT CursorStyle.
+        // Checking against your logic: `match (intermediates, terminator)`
+        // Your code expects `[b' '], b'q'`.
+        assert!(output.is_empty() || !matches!(output[0], TerminalOutput::SetCursorStyle { .. }));
+    }
+
+    #[test]
+    fn test_synchronized_updates() {
+        let mut parser = AnsiParser::new();
+
+        // 1. Begin Synchronized Update (CSI ? 2026 h)
+        let output = parser.push(b"\x1B[?2026h");
+        assert_eq!(output, vec![TerminalOutput::BeginSynchronizedUpdate]);
+
+        // 2. End Synchronized Update (CSI ? 2026 l)
+        let output = parser.push(b"\x1B[?2026l");
+        assert_eq!(output, vec![TerminalOutput::EndSynchronizedUpdate]);
+    }
+    #[test]
+    fn test_regression_osc_st_termination() {
+        // This tests the fix for the "Google" bug where the first letter
+        // after a hyperlink was being eaten.
+        let mut parser = AnsiParser::new();
+
+        // OSC 8 + Params + URL + ST + "Text"
+        // ST is \x1B\\ (ESC \)
+        let input = b"\x1B]8;;http://example.com\x1B\\Text";
+
+        let output = parser.push(input);
+
+        // We expect 2 events:
+        // 1. The OSC sequence
+        // 2. The Data "Text" (The 'T' must NOT be missing)
+        assert_eq!(output.len(), 2);
+
+        // Check 1: OSC
+        match &output[0] {
+            TerminalOutput::Osc { command, .. } => assert_eq!(*command, 8),
+            _ => panic!("Expected OSC"),
+        }
+
+        // Check 2: Data
+        // Crucial check: Ensure the data is "Text", not "ext"
+        assert_eq!(output[1], TerminalOutput::Data(b"Text".to_vec()));
+    }
+
+    #[test]
+    fn test_bracketed_paste_mode() {
+        let mut parser = AnsiParser::new();
+
+        // Enable Bracketed Paste Mode (CSI ? 2004 h)
+        let output = parser.push(b"\x1B[?2004h");
+        assert_eq!(output, vec![TerminalOutput::SetMode(Mode::BracketedPaste)]);
+
+        // Disable Bracketed Paste Mode (CSI ? 2004 l)
+        let output = parser.push(b"\x1B[?2004l");
+        assert_eq!(output, vec![TerminalOutput::ResetMode(Mode::BracketedPaste)]);
+    }
+
+    #[test]
+    fn test_modify_other_keys_mode() {
+        let mut parser = AnsiParser::new();
+
+        // Enable Modify Other Keys (CSI ? 1037 h)
+        let output = parser.push(b"\x1B[?1037h");
+        assert_eq!(output, vec![TerminalOutput::SetMode(Mode::ModifyOtherKeys)]);
+
+        // Disable Modify Other Keys (CSI ? 1037 l)
+        let output = parser.push(b"\x1B[?1037l");
+        assert_eq!(output, vec![TerminalOutput::ResetMode(Mode::ModifyOtherKeys)]);
+    }
 }

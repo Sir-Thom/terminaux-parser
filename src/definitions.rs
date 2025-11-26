@@ -1,6 +1,10 @@
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Mode {
     Decckm,
+    BracketedPaste,
+    ModifyOtherKeys,
+    Insert,
+    LineFeedNewLine,
     Unknown(Vec<u8>),
 }
 
@@ -130,6 +134,18 @@ pub enum TerminalOutput {
     ExitAltScreen,
     Invalid,
     DeviceControl { code: u8 },
+    SetScrollingRegion { top: usize, bottom: Option<usize> },
+    BeginSynchronizedUpdate,
+    EndSynchronizedUpdate,
+    SetCursorStyle { shape: CursorShape, blinking: bool },
+    /// Set hyperlink with optional ID and URI
+    SetHyperlink { id: Option<String>, uri: String },
+    /// Clear current hyperlink
+    ClearHyperlink,
+    /// Set active charset (G0-G3)
+    SetActiveCharset(CharsetIndex),
+    /// Configure charset designation
+    ConfigureCharset { index: CharsetIndex, charset: StandardCharset },
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FormatTag {
@@ -141,4 +157,83 @@ pub struct FormatTag {
     pub bold: bool,
     pub italic: bool,
     pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CursorShape {
+    #[default]
+    Block,
+    Underline,
+    Beam, // Vertical bar
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CharsetIndex {
+    G0,
+    G1,
+    G2,
+    G3,
+}
+
+impl Default for CharsetIndex {
+    fn default() -> Self {
+        CharsetIndex::G0
+    }
+}
+
+/// Standard character sets
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StandardCharset {
+    Ascii,
+    SpecialCharacterAndLineDrawing,
+}
+
+impl Default for StandardCharset {
+    fn default() -> Self {
+        StandardCharset::Ascii
+    }
+}
+
+impl StandardCharset {
+    /// Map character according to charset
+    pub fn map(self, c: char) -> char {
+        match self {
+            StandardCharset::Ascii => c,
+            StandardCharset::SpecialCharacterAndLineDrawing => match c {
+                '_' => ' ',
+                '`' => '◆',
+                'a' => '▒',
+                'b' => '\u{2409}', // Symbol for horizontal tabulation
+                'c' => '\u{240c}', // Symbol for form feed
+                'd' => '\u{240d}', // Symbol for carriage return
+                'e' => '\u{240a}', // Symbol for line feed
+                'f' => '°',
+                'g' => '±',
+                'h' => '\u{2424}', // Symbol for newline
+                'i' => '\u{240b}', // Symbol for vertical tabulation
+                'j' => '┘',
+                'k' => '┐',
+                'l' => '┌',
+                'm' => '└',
+                'n' => '┼',
+                'o' => '⎺',
+                'p' => '⎻',
+                'q' => '─',
+                'r' => '⎼',
+                's' => '⎽',
+                't' => '├',
+                'u' => '┤',
+                'v' => '┴',
+                'w' => '┬',
+                'x' => '│',
+                'y' => '≤',
+                'z' => '≥',
+                '{' => 'π',
+                '|' => '≠',
+                '}' => '£',
+                '~' => '·',
+                _ => c,
+            },
+        }
+    }
 }
