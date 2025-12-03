@@ -1310,14 +1310,14 @@ mod comprehensive_tests {
         let output = parser.push(b"\x1B[5r");
         assert_eq!(output, vec![TerminalOutput::SetScrollingRegion {
             top: 5,
-            bottom: None
+            bottom: Some(0)
         }]);
 
         // 3. Reset margins (empty params)
         let output = parser.push(b"\x1B[r");
         assert_eq!(output, vec![TerminalOutput::SetScrollingRegion {
             top: 1, // Default for param 0
-            bottom: None
+            bottom: Some(0)
         }]);
     }
 

@@ -17,6 +17,18 @@ pub enum State {
     SosPmApcString = 13,
 }
 
+impl State {
+    /// Converts a u8 value (from the transition table) back into a State enum.
+    pub fn from_u8(value: u8) -> Option<Self> {
+        if value <= Self::SosPmApcString as u8 {
+            // SAFETY: The value is guaranteed to be within the valid range of the enum.
+            Some(unsafe { std::mem::transmute(value) })
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum Action {
@@ -35,6 +47,18 @@ pub enum Action {
     OscStart = 12,
     OscPut = 13,
     OscEnd = 14,
+}
+
+impl Action {
+    /// Converts a u8 value (from the transition table) back into an Action enum.
+    pub fn from_u8(value: u8) -> Option<Self> {
+        if value <= Self::OscEnd as u8 {
+            // SAFETY: The value is guaranteed to be within the valid range of the enum.
+            Some(unsafe { std::mem::transmute(value) })
+        } else {
+            None
+        }
+    }
 }
 
 pub type TableEntry = u8;

@@ -146,6 +146,9 @@ pub enum TerminalOutput {
     SetActiveCharset(CharsetIndex),
     /// Configure charset designation
     ConfigureCharset { index: CharsetIndex, charset: StandardCharset },
+    SetDoubleHeightLine { top_half: bool },
+    SetDoubleWidthLine,
+    SetSingleWidthLine,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FormatTag {

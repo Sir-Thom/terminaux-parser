@@ -414,6 +414,32 @@ impl AnsiParser {
                     );
                 }
             }
+            (Some(&b'#'), terminator) => {
+                match terminator {
+                    b'3' => {
+                        // ESC # 3 - DECDHL Double Height Line (top half)
+                        debug!("DECDHL Double Height Line (top half)");
+                        self.emit_output(output, TerminalOutput::SetDoubleHeightLine { top_half: true });
+                    }
+                    b'4' => {
+                        // ESC # 4 - DECDHL Double Height Line (bottom half)
+                        debug!("DECDHL Double Height Line (bottom half)");
+                        self.emit_output(output, TerminalOutput::SetDoubleHeightLine { top_half: false });
+                    }
+                    b'5' => {
+                        // ESC # 5 - DECSWL Single Width Line
+                        debug!("DECSWL Single Width Line");
+                        self.emit_output(output, TerminalOutput::SetSingleWidthLine);
+                    }
+                    b'6' => {
+                        // ESC # 6 - DECDWL Double Width Line
+                        debug!("DECDWL Double Width Line");
+                        self.emit_output(output, TerminalOutput::SetDoubleWidthLine);
+                    }
+                    _ => warn!("Unknown DEC line drawing sequence: ESC # {}", terminator as char),
+                }
+            }
+
             _ => warn!("Unknown ESC sequence: {:?} {}", self.intermediates, terminator as char),
         }
     }
@@ -436,6 +462,8 @@ impl AnsiParser {
         if has_question_mark || (is_empty_intermediates && (terminator == b'h' || terminator == b'l')) {
             match terminator {
                 b'h' => match param {
+                    4 => self.emit_output(output, TerminalOutput::SetMode(Mode::Insert)),
+                    20 => self.emit_output(output, TerminalOutput::SetMode(Mode::LineFeedNewLine)),
                     25 => self.emit_output(output, TerminalOutput::SetCursorVisibility(true)),
                     1049 => self.emit_output(output, TerminalOutput::EnterAltScreen),
                     1 => self.emit_output(output, TerminalOutput::SetMode(Mode::Decckm)),
@@ -443,11 +471,14 @@ impl AnsiParser {
                         output.push(TerminalOutput::BeginSynchronizedUpdate);
                         self.sync_update_depth += 1;
                     }
+
                     2004 => self.emit_output(output, TerminalOutput::SetMode(Mode::BracketedPaste)),
                     1037 => self.emit_output(output, TerminalOutput::SetMode(Mode::ModifyOtherKeys)),
                     _ => {}
                 },
                 b'l' => match param {
+                    4 => self.emit_output(output, TerminalOutput::ResetMode(Mode::Insert)),
+                    20 => self.emit_output(output, TerminalOutput::ResetMode(Mode::LineFeedNewLine)),
                     25 => self.emit_output(output, TerminalOutput::SetCursorVisibility(false)),
                     1049 => self.emit_output(output, TerminalOutput::ExitAltScreen),
                     1 => self.emit_output(output, TerminalOutput::ResetMode(Mode::Decckm)),
@@ -470,6 +501,8 @@ impl AnsiParser {
                 return;
             }
         }
+
+
         let has_space_intermediate = self.intermediates.first() == Some(&b' ');
         let intermediates_empty = self.intermediates.is_empty();
 
@@ -489,6 +522,10 @@ impl AnsiParser {
                 };
 
                 self.emit_output(output, TerminalOutput::SetCursorStyle { shape, blinking });
+            }
+            (_, true,b'3') => {
+                // Handle CSI 3 (e.g., Delete Line) - this is just an example
+               //  output.push(TerminalOutput::DeleteLine(self.get_param(0, 1)));
             }
             // Character repeat
             (_, true, b'b') => {
@@ -521,6 +558,7 @@ impl AnsiParser {
                     y: None,
                 },
             ),
+
             // Erasing
             (_, true, b'J') => match self.get_param(0, 0) {
                 0 => self.emit_output(output, TerminalOutput::ClearForwards),
@@ -539,12 +577,18 @@ impl AnsiParser {
             (_, true, b'm') => self.parse_sgr(output),
             // Scrolling region
             (_, true, b'r') => {
-                let top = self.get_param(0, 1);
+                let top = self.get_param(0, 1);  // Default to 1 if not provided
                 let bottom = self.get_param_opt(1);
-                self.emit_output(output, TerminalOutput::SetScrollingRegion { top, bottom });
+
+                // If bottom is not provided, use the terminal height
+                let bottom = bottom.unwrap_or(0); // 0 means "use default"
+
+                self.emit_output(output, TerminalOutput::SetScrollingRegion { top, bottom:Some(bottom) });
             }
-            _ => warn!("Unknown CSI: has_space={} empty={} terminator={}",
-                      has_space_intermediate, intermediates_empty, terminator as char),
+            _ => {
+                warn!("Unknown CSI: params={:?}, intermediates={:?}, terminator={}",
+          self.params, self.intermediates, terminator as char);
+            }
         }
     }
 
